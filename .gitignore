@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.eggs/
+*.egg-info/
+*.egg
+build/
+dist/
+plan/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.claude
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data & artifacts
+data/raw/
+data/processed/
+models/*.keras
+models/*.h5
+models/*.pkl
+!models/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Test/coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Env
+.env
+.env.local
