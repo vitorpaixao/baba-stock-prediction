@@ -15,6 +15,20 @@
 
 ---
 
+<p align="center">
+  <img src="src/assets/baba_prediction.png" alt="BABA Stock Prediction — Streamlit frontend" width="900">
+</p>
+
+## What you get out of this project
+
+Three live surfaces, all running in Docker, all wired to the same model:
+
+- **Streamlit frontend** (`http://localhost:8501`, screenshot above). The main entry point for humans. Shows the **next-day predicted close** for BABA on page load, a **Last training metrics** card (MAE / RMSE / MAPE) for the currently loaded model, a **Train a new model** form where you can tweak every hyperparameter (epochs, units, batch_size, learning_rate, dropout, lookback, patience, seed) and fire a training run with one click, and a **Manual prediction** form for custom 60-day windows.
+- **MLflow** (`http://localhost:5000`). Experiment tracker. Every training run logged with its hyperparameters, per-epoch loss/val_loss/mae/val_mae curves, test-set MAE/RMSE/MAPE, and the saved Keras artifact. Use it to compare runs and pick the best model.
+- **Grafana** (`http://localhost:3001`, admin/admin). Real-time observability dashboard, **BABA Overview**. Service health (request rate, error %, p50/p95/p99 latency, model loaded), model serving (predictions per minute, pure inference latency, predicted-close distribution heatmap), input drift (window mean/std heatmaps), and training observability (time since last training, last test metrics, total training runs).
+
+---
+
 ## Why this exists
 
 This is the deliverable for **Tech Challenge Phase 4** of the MLET postgraduate program (worth 90% of the phase grade). The goal is to go end-to-end on a deep-learning system: **collect → preprocess → train an LSTM → save the model → serve it through a REST API → monitor it in production**.
