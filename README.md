@@ -70,9 +70,17 @@ Spec: [`plan/plan.md`](plan/plan.md) · Implementation check: [`plan/challenge_c
 
 ---
 
-## Quickstart — Docker Compose (recommended)
+## Quickstart — Local (recommended for demo)
 
-Requires Docker Desktop running. The trained model + scaler must already exist locally under `models/`; if not, run the local training step (one command) below first.
+The **fastest path** is local Python. The notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) runs the entire pipeline end-to-end in ~2 minutes — coleta, modelo LSTM, treino, avaliação, salvamento. See [Exploring with the notebook](#exploring-with-the-notebook) below.
+
+For a video defense, follow [`plan/demo_script.md`](plan/demo_script.md) — an ~11 min step-by-step that uses the notebook as the centerpiece.
+
+---
+
+## Quickstart — Docker Compose (deployment artifact)
+
+The `Dockerfile` and `docker-compose.yml` package the API + MLflow as a portable stack — useful to demonstrate MLOps maturity for the spec (Fase 4 / 5), though for a live demo the local path above is more reliable. Requires Docker Desktop running. The trained model + scaler must already exist locally under `models/`; if not, run the local training step (one command) below first.
 
 ```bash
 docker compose up -d --build
@@ -126,35 +134,40 @@ python -m src.model.train --epochs 100 --units 64 --batch-size 64 --lr 5e-4
 
 ## Exploring with the notebook
 
-The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) walks through the data and validates the modeling pipeline interactively. It's the right place to start if you want to understand the project before reading code.
+The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo of the project**. It runs the entire pipeline end-to-end — covering **Fases 1, 2 and 3** of the challenge spec — by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
+
+Use it as the starting point if you want to understand the project, **and** as the script for the video defense (see [`plan/demo_script.md`](plan/demo_script.md)).
 
 **Launch it:**
 
 ```bash
 .venv\Scripts\activate
 jupyter lab notebooks/01_eda_lstm_baba.ipynb
-# or:
-jupyter notebook notebooks/01_eda_lstm_baba.ipynb
 ```
 
-**What's inside (run cells top-to-bottom):**
+**What's inside (run cells top-to-bottom — ~2 minutes total):**
 
-| # | Cell | What it shows |
+| # | Section | What it shows |
 | - | --- | --- |
-| 1 | **Load data** | Reads `data/raw/baba.parquet` (auto-fetches if missing) and prints the head. |
-| 2 | **Price + volume plots** | Two-panel chart: BABA Close (top) and Volume (bottom). |
-| 3 | **Stationarity check** | Close + 60-day rolling mean side-by-side with daily returns. Quick visual that prices trend but returns oscillate around zero. |
-| 4 | **Naive baseline** | Computes MAE / RMSE / MAPE for the trivial "predict yesterday's close" model. **This is the floor any model must beat.** |
-| 5 | **LSTM prototype** | Trains a small LSTM for 5 epochs and prints the same metrics on the test split. |
-| 6 | **Actual vs. predicted plot** | Overlays the prediction series on the true series for the test window. |
-| 7 | **Notes** | Hyperparameter rationale that feeds into the production `src/model/train.py`. |
+| 1 | **Imports + config** | Loads `src/config.py` constants (ticker, lookback, hyperparams). |
+| 2 | **Fase 1.1 — Coleta** | Reads `data/raw/baba.parquet` (auto-fetches if missing). 2,800+ trading days. |
+| 3 | **EDA — Preço + volume** | Two-panel chart: BABA Close (top) and Volume (bottom). |
+| 4 | **EDA — Retornos diários** | Close + 60-day rolling mean, plus daily returns. Visual proof prices are non-stationary, returns are not. |
+| 5 | **Baseline ingênuo** | MAE / RMSE / MAPE for "predict yesterday's close". The floor any model must beat. |
+| 6 | **Fase 1.2 — Pré-processamento** | Calls `build_splits()` from `src/data/preprocess.py`; shows shapes and scaler bounds. |
+| 7 | **Fase 2.1 — Construção** | Calls `build_lstm()` from `src/model/architecture.py`; renders `model.summary()`. |
+| 8 | **Fase 2.2 — Treinamento** | Real training loop (~30 epochs, ~1 min on CPU) with `EarlyStopping` + `ModelCheckpoint`. Plots loss/val_loss + mae/val_mae curves. |
+| 9 | **Fase 2.3 — Avaliação** | Inverse-transforms predictions, computes MAE/RMSE/MAPE in USD via `all_metrics()` from `src/model/evaluate.py`, prints LSTM-vs-naive comparison. |
+| 10 | **Actual vs predicted plot** | Overlays prediction series on real series for the test window. |
+| 11 | **Fase 3 — Salvamento** | `model.save()` + `joblib.dump(scaler)` to `models/`. |
+| 12 | **Fase 4 — Deploy (referência)** | Pointer card to `src/api/` and Docker setup. Not executed in the notebook. |
+| 13 | **Fase 5 — Monitoring (referência)** | Pointer to MLflow setup + serving middleware. |
 
 **Tips:**
 
-- The notebook imports from `src/`, so make sure the package is installed (`pip install -e ".[dev]"`) before launching Jupyter.
-- For a clean re-run, run **Kernel → Restart & Run All**.
-- For a faster prototype run, lower `epochs` in cell 5 (already set to 5).
-- To compare against the production model, after running `python -m src.model.train` you can `from tensorflow.keras.models import load_model; m = load_model("../models/lstm_baba.keras")` in a new cell.
+- Install the package first (`pip install -e ".[dev]"`) and register the venv as a Jupyter kernel: `python -m ipykernel install --user --name baba-stock-prediction --display-name "BABA venv"`.
+- For a clean re-run during a demo, use **Kernel → Restart & Run All** — takes ~2 minutes.
+- Want MLflow tracking on top? Run `python -m src.model.train` in a terminal — that's the same model but with full MLflow logging to `./mlruns/`.
 
 ---
 
@@ -248,9 +261,15 @@ Every `python -m src.model.train` invocation creates a run with:
 Open the UI:
 
 ```bash
-mlflow ui --backend-store-uri ./mlruns      # local file backend
-# or visit http://localhost:5000 after `docker compose up`
+# local file backend (recommended for demo/dev):
+mlflow ui --backend-store-uri ./mlruns --port 5050
+# → http://localhost:5050
+
+# or, if the compose stack is up:
+# → http://localhost:5000 (separate sqlite-backed server)
 ```
+
+> **Tip:** use port `5050` for the local UI to avoid colliding with the compose MLflow on `5000`.
 
 ### Serving-time — JSON logs + `/metrics`
 
@@ -275,7 +294,7 @@ baba-stock-prediction/
 │   ├── model/{architecture,train,evaluate}.py
 │   ├── api/{main,schemas,inference,middleware}.py
 │   └── monitoring/mlflow_utils.py
-├── notebooks/01_eda_lstm_baba.ipynb    # EDA + prototype (start here)
+├── notebooks/01_eda_lstm_baba.ipynb    # full pipeline demo — start here
 ├── tests/                              # 12 pytest cases
 ├── models/                             # lstm_baba.keras, scaler.pkl (gitignored)
 ├── data/raw/baba.parquet               # (gitignored)
@@ -321,6 +340,8 @@ Tests run in ~30 seconds without hitting yfinance or training a real model (they
 | [`plan/plan.md`](plan/plan.md) | Original tech-challenge spec (Portuguese). |
 | [`plan/challenge_check.md`](plan/challenge_check.md) | Spec → delivered mapping with file pointers. Use this for grading. |
 | [`plan/challenge_process.md`](plan/challenge_process.md) | Concepts, decisions, and metric definitions — defense notes for the board. |
+| [`plan/demo_script.md`](plan/demo_script.md) | Step-by-step ~11 min script for the video defense (notebook-first, Docker as backup). |
+| [`plan/podcast_script.md`](plan/podcast_script.md) | 4-episode podcast script (PT-BR) covering the project end-to-end. |
 
 ---
 
