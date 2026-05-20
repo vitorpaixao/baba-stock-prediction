@@ -68,56 +68,33 @@ This is the deliverable for **Tech Challenge Phase 4** of the MLET postgraduate 
 
 ---
 
-## Quickstart: Local (recommended for demo)
+## How to run this project
 
-The **fastest path** is local Python. The notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) runs the entire pipeline end-to-end in ~2 minutes: data collection, LSTM model, training, evaluation, model saving. See [Exploring with the notebook](#exploring-with-the-notebook) below.
+Three independent flows. Pick the one matching your goal:
 
----
+| Flow | What it does | MLflow runs created? | Best for |
+| --- | --- | --- | --- |
+| **1. Notebook demo** | Runs the entire pipeline interactively in Jupyter, saves model + scaler. | ❌ No | Understanding the project, video defense |
+| **2. Local (script)** | `python -m src.model.train` from the terminal with full MLflow logging to `./mlruns/`. | ✅ Yes (file backend) | Iterating on hyperparameters, reproducible training |
+| **3. Docker compose** | Containerized API + dedicated MLflow server, training logs to the dockerized MLflow. | ✅ Yes (SQLite server) | Demonstrating MLOps maturity, deployment |
 
-## Quickstart: Docker Compose (deployment artifact)
-
-The `Dockerfile` and `docker-compose.yml` package the API + MLflow as a portable stack, useful to demonstrate MLOps maturity for the spec (Requirements 4 and 5), though for a live demo the local path above is more reliable. Requires Docker Desktop running. The trained model + scaler must already exist locally under `models/`; if not, run the local training step (one command) below first.
-
-```bash
-docker compose up -d --build
-
-# API           → http://localhost:8010/docs
-# MLflow UI     → http://localhost:5000
-
-# smoke test
-curl http://localhost:8010/health
-curl -X POST http://localhost:8010/predict/latest
-```
-
-| Service       | Host port | Container port | Purpose                                 |
-| ------------- | --------- | -------------- | --------------------------------------- |
-| `baba-api`    | **8010**  | 8000           | FastAPI prediction service              |
-| `baba-mlflow` | **5000**  | 5000           | MLflow tracking server (SQLite-backed)  |
-
-> The host port for the API is `8010` (not `8000`) to avoid colliding with other dev containers. The container itself still listens on 8000.
+All three share the same one-time Python setup below.
 
 ---
 
-## Quickstart: Local
+## One-time setup (all flows)
 
-```bash
-# 1. Python 3.11 or 3.12 (TensorFlow 2.18 requirement)
+```powershell
+# Python 3.11 or 3.12 (TensorFlow 2.18 requirement)
 python -m venv .venv
-.venv\Scripts\activate           # Windows
-# source .venv/bin/activate      # Linux/macOS
+.venv\Scripts\activate            # Windows
+# source .venv/bin/activate       # Linux/macOS
 
-# 2. Install (use pip, not uv; see note below)
+# Install in editable mode with dev extras (jupyter, pytest, matplotlib, ...)
 pip install -e ".[dev]"
 
-# 3. Fetch BABA history into data/raw/baba.parquet (idempotent)
+# Fetch BABA history once (idempotent: skips if data/raw/baba.parquet exists)
 python -m src.data.fetch
-
-# 4. Train the LSTM, log to ./mlruns, save models/lstm_baba.keras + scaler.pkl
-python -m src.model.train
-
-# 5. Serve
-uvicorn src.api.main:app --reload
-# → http://localhost:8000/docs
 ```
 
 > **Install with `pip`, not `uv`.** On Windows, `uv sync` mishandles the `tensorflow` → `tensorflow-intel` meta-package redirect and leaves TensorFlow non-importable. `pip install -e ".[dev]"` is the supported path. If you've already run `uv sync` and broken the env, recover with:
@@ -126,23 +103,17 @@ uvicorn src.api.main:app --reload
 > pip install --force-reinstall tensorflow==2.18.0
 > ```
 
-Training takes ~1 minute on CPU. Tune via CLI flags:
-
-```bash
-python -m src.model.train --epochs 100 --units 64 --batch-size 64 --lr 5e-4
-```
-
 ---
 
-## Exploring with the notebook
+## Flow 1: Notebook demo
 
-The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo of the project**. It runs the entire pipeline end-to-end, covering **Requirements 1, 2 and 3** of the challenge spec, by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
+The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo** of the project. It runs the entire pipeline end-to-end in ~2 minutes, covering Requirements 1, 2 and 3 of the challenge spec by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
 
-Use it as the starting point if you want to understand the project.
+> ⚠️ **This flow does NOT generate MLflow runs.** The notebook calls `model.fit(...)` directly without wrapping it in `mlflow.start_run()`. If you want MLflow tracking, use **Flow 2** or **Flow 3** instead. The notebook still saves `models/lstm_baba.keras` + `models/scaler.pkl` to disk.
 
 **Launch it:**
 
-```bash
+```powershell
 .venv\Scripts\activate
 jupyter lab notebooks/01_eda_lstm_baba.ipynb
 ```
@@ -167,9 +138,101 @@ jupyter lab notebooks/01_eda_lstm_baba.ipynb
 
 **Tips:**
 
-- Install the package first (`pip install -e ".[dev]"`) and register the venv as a Jupyter kernel: `python -m ipykernel install --user --name baba-stock-prediction --display-name "BABA venv"`.
+- Register the venv as a Jupyter kernel once: `python -m ipykernel install --user --name baba-stock-prediction --display-name "BABA venv"`.
 - For a clean re-run during a demo, use **Kernel → Restart & Run All** (takes ~2 minutes).
-- Want MLflow tracking on top? Run `python -m src.model.train` in a terminal. That's the same model but with full MLflow logging to `./mlruns/`.
+
+---
+
+## Flow 2: Local script with MLflow file backend
+
+For iteration and reproducible training with full MLflow tracking, run the training script directly. Runs land in `./mlruns/` (file backend).
+
+```powershell
+# Train + log to ./mlruns/ + save models/lstm_baba.keras + scaler.pkl
+python -m src.model.train
+
+# Tune via CLI flags
+python -m src.model.train --epochs 100 --units 64 --batch-size 64 --lr 5e-4
+
+# Serve the API locally
+uvicorn src.api.main:app --reload
+# → http://localhost:8000/docs
+```
+
+**View MLflow runs in the browser:**
+
+```powershell
+mlflow ui --backend-store-uri ./mlruns --port 5050
+# → http://localhost:5050
+```
+
+> Use port `5050` to avoid colliding with the compose MLflow on `5000` (in case Flow 3 is also up).
+
+Each `python -m src.model.train` invocation logs:
+
+- **Params**: `epochs`, `batch_size`, `units`, `dropout`, `lookback`, `learning_rate`, `patience`, `seed`.
+- **Per-epoch metrics**: `loss`, `val_loss`, `mae`, `val_mae`.
+- **Test metrics (USD scale)**: `test_mae`, `test_rmse`, `test_mape`.
+- **Artifact**: the saved Keras model.
+- **Registry entry**: `lstm-baba`, auto-incremented version.
+
+Training takes ~1 minute on CPU.
+
+---
+
+## Flow 3: Docker compose (full stack)
+
+The `Dockerfile` and `docker-compose.yml` package the API and a dedicated MLflow server as a portable stack, demonstrating deployment + monitoring maturity (Requirements 4 and 5 of the spec). Requires Docker Desktop running.
+
+### Prerequisite: trained model on disk
+
+The Docker image bakes in `models/lstm_baba.keras` + `models/scaler.pkl` at build time. If those don't exist yet, run **Flow 1** or **Flow 2** first to produce them.
+
+### Bring up the stack
+
+```powershell
+docker compose up -d --build
+docker compose ps     # both services should be `Up (healthy)` after ~15s
+```
+
+| Service       | Host port | Container port | Purpose                                |
+| ------------- | --------- | -------------- | -------------------------------------- |
+| `baba-api`    | **8010**  | 8000           | FastAPI prediction service             |
+| `baba-mlflow` | **5000**  | 5000           | MLflow tracking server (SQLite-backed) |
+
+> Host port for the API is `8010` (not `8000`) to avoid colliding with other dev containers. The container itself still listens on `8000`.
+
+### Smoke-test the API
+
+```powershell
+curl http://localhost:8010/health
+curl -X POST http://localhost:8010/predict/latest
+```
+
+### Logging a training run into the compose MLflow
+
+By default, `python -m src.model.train` writes to the local file backend (`./mlruns/`). To send a run to the **dockerized** MLflow server instead, set two env vars **before** invoking training:
+
+```powershell
+$env:MLFLOW_TRACKING_URI = "http://localhost:5000"
+$env:PYTHONIOENCODING = "utf-8"   # avoids a cp1252 emoji crash on Windows
+python -m src.model.train
+# then clear when done:
+Remove-Item Env:\MLFLOW_TRACKING_URI
+```
+
+Refresh `http://localhost:5000` after the run finishes to see it under experiment `baba-lstm`.
+
+> **Why `PYTHONIOENCODING` and not a `.env` file:** MLflow's client prints emoji to stdout. On Windows, the default cp1252 codec crashes on them. `PYTHONIOENCODING` is read by the CPython interpreter **before** any Python code runs, so a `.env` loaded via `python-dotenv` is too late. The env var must be set in the shell.
+>
+> **Note on the model registry:** the compose image is `ghcr.io/mlflow/mlflow:v2.16.2` while the client is `mlflow>=3.x`. The `registered_model_name=` call returns 404 against the older server, gets caught by a `try/except`, and is logged as a warning. Run + metrics + artifact still log fine. Bump the compose image to `ghcr.io/mlflow/mlflow:v3.12.0` if you want registry write-through.
+
+### Stop the stack
+
+```powershell
+docker compose stop   # pauses, keeps volumes
+docker compose down   # removes containers (keeps volumes by default)
+```
 
 ---
 
@@ -248,42 +311,7 @@ In-process counters and latency percentiles over the last 1,000 requests.
 
 ---
 
-## Monitoring
-
-### Training-time: MLflow
-
-Every `python -m src.model.train` invocation creates a run with:
-
-- **Params**: `epochs`, `batch_size`, `units`, `dropout`, `lookback`, `learning_rate`, `patience`, `seed`.
-- **Per-epoch metrics**: `loss`, `val_loss`, `mae`, `val_mae`.
-- **Test metrics (USD scale)**: `test_mae`, `test_rmse`, `test_mape`.
-- **Artifact**: the saved Keras model.
-- **Registry entry**: `lstm-baba`, auto-incremented version.
-
-Open the UI:
-
-```bash
-# local file backend (recommended for demo/dev):
-mlflow ui --backend-store-uri ./mlruns --port 5050
-# → http://localhost:5050
-
-# or, if the compose stack is up:
-# → http://localhost:5000 (separate sqlite-backed server)
-```
-
-> **Tip:** use port `5050` for the local UI to avoid colliding with the compose MLflow on `5000`.
-
-> **Logging into the compose MLflow.** Training defaults to the local file backend (`./mlruns/`). To send a run to the dockerized MLflow server instead, set the env var **before** running training:
->
-> ```powershell
-> $env:MLFLOW_TRACKING_URI = "http://localhost:5000"
-> $env:PYTHONIOENCODING = "utf-8"   # avoids a cp1252 emoji crash on Windows
-> python -m src.model.train
-> # then clear it:
-> Remove-Item Env:\MLFLOW_TRACKING_URI
-> ```
-
-### Serving-time: JSON logs + `/metrics`
+## Serving-time monitoring: JSON logs + `/metrics`
 
 Each request emits one line of JSON to stdout (parseable with `jq`, Loki, ELK, Datadog):
 
