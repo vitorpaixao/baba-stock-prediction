@@ -67,3 +67,40 @@ def test_metrics_after_traffic(client, synthetic_df) -> None:
     assert body["total_requests"] >= 2
     assert "/health" in body["by_route"]
     assert body["latency_ms"]["mean"] >= 0
+
+
+def test_train_endpoint_smoke(client, monkeypatch) -> None:
+    """POST /train wiring smoke. The real train_fn is stubbed to keep the test fast
+    and to avoid hitting yfinance + MLflow during unit tests."""
+
+    def _fake_train(**kwargs) -> dict[str, float]:
+        # mimic the real return type
+        return {"mae": 4.0, "rmse": 5.5, "mape": 3.25}
+
+    monkeypatch.setattr(api_main, "train_fn", _fake_train)
+
+    class _Run:
+        class info:
+            run_id = "test-run-id-1234"
+
+    monkeypatch.setattr(api_main.mlflow, "last_active_run", lambda: _Run)
+    monkeypatch.setattr(api_main, "load_predictor", lambda: api_main._state["predictor"])
+
+    r = client.post("/train", json={"epochs": 1, "units": 8})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "completed"
+    assert body["run_id"] == "test-run-id-1234"
+    assert body["test_metrics"]["mae"] == 4.0
+    assert body["test_metrics"]["rmse"] == 5.5
+    assert body["test_metrics"]["mape"] == 3.25
+    assert body["model_path"].endswith("lstm_baba.keras")
+    assert body["duration_seconds"] >= 0
+    assert isinstance(body["mlflow_tracking_uri"], str)
+
+
+def test_train_endpoint_validation_422(client) -> None:
+    r = client.post("/train", json={"epochs": 0})  # epochs must be > 0
+    assert r.status_code == 422
+    r = client.post("/train", json={"dropout": 1.5})  # must be < 1
+    assert r.status_code == 422

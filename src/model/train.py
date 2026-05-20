@@ -1,15 +1,12 @@
 """Train LSTM, log to MLflow, persist model + scaler for inference.
 
-Usage:
-    python -m src.model.train
-    python -m src.model.train --epochs 100 --units 64
+This module is a library, not a CLI. The canonical way to start a training
+run is the ``POST /train`` endpoint exposed by ``src.api.main``.
 """
 from __future__ import annotations
 
-import argparse
 import logging
 import random
-import sys
 from dataclasses import asdict
 
 import numpy as np
@@ -109,28 +106,3 @@ def train(epochs: int = MODEL.epochs,
         log.info("MLflow run %s — model saved to %s", run.info.run_id, MODEL_PATH)
 
     return metrics
-
-
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s")
-    p = argparse.ArgumentParser()
-    p.add_argument("--epochs", type=int, default=MODEL.epochs)
-    p.add_argument("--batch-size", type=int, default=MODEL.batch_size)
-    p.add_argument("--units", type=int, default=MODEL.lstm_units)
-    p.add_argument("--dropout", type=float, default=MODEL.dropout)
-    p.add_argument("--lookback", type=int, default=MODEL.lookback)
-    p.add_argument("--lr", type=float, default=MODEL.learning_rate)
-    p.add_argument("--patience", type=int, default=MODEL.early_stop_patience)
-    p.add_argument("--seed", type=int, default=MODEL.random_seed)
-    args = p.parse_args(argv)
-
-    metrics = train(epochs=args.epochs, batch_size=args.batch_size, units=args.units,
-                    dropout=args.dropout, lookback=args.lookback,
-                    learning_rate=args.lr, patience=args.patience, seed=args.seed)
-    print(metrics)
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

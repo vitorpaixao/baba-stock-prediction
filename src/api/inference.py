@@ -40,7 +40,7 @@ def load_predictor(model_path: Path = MODEL_PATH,
                    scaler_path: Path = SCALER_PATH) -> Predictor:
     if not model_path.exists():
         raise FileNotFoundError(f"Model artifact missing: {model_path}. "
-                                "Run `python -m src.model.train` first.")
+                                "Call POST /train on the API first.")
     if not scaler_path.exists():
         raise FileNotFoundError(f"Scaler missing: {scaler_path}.")
     log.info("Loading model %s and scaler %s", model_path, scaler_path)

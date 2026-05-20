@@ -70,19 +70,18 @@ This is the deliverable for **Tech Challenge Phase 4** of the MLET postgraduate 
 
 ## How to run this project
 
-Three independent flows. Pick the one matching your goal:
+Two paths. Pick the one matching your goal:
 
-| Flow | What it does | MLflow runs created? | Best for |
+| Path | What it does | MLflow runs created? | Best for |
 | --- | --- | --- | --- |
-| **1. Notebook demo** | Runs the entire pipeline interactively in Jupyter, saves model + scaler. | ❌ No | Understanding the project, video defense |
-| **2. Local (script)** | `python -m src.model.train` from the terminal with full MLflow logging to `./mlruns/`. | ✅ Yes (file backend) | Iterating on hyperparameters, reproducible training |
-| **3. Docker compose** | Containerized API + dedicated MLflow server, training logs to the dockerized MLflow. | ✅ Yes (SQLite server) | Demonstrating MLOps maturity, deployment |
+| **A. Notebook demo** | Runs the entire pipeline interactively in Jupyter, saves model + scaler. | ❌ No | Understanding the project, walkthroughs |
+| **B. Docker Compose (full pipeline)** | Containerized API + dedicated MLflow server. Training is fired from the API via `POST /train` and logged to the dockerized MLflow. | ✅ Yes (SQLite-backed server) | Reproducible training, serving, deployment, monitoring |
 
-All three share the same one-time Python setup below.
+Both share the same one-time Python setup below.
 
 ---
 
-## One-time setup (all flows)
+## One-time setup (both paths)
 
 ```powershell
 # Python 3.11 or 3.12 (TensorFlow 2.18 requirement)
@@ -97,6 +96,8 @@ pip install -e ".[dev]"
 python -m src.data.fetch
 ```
 
+> The `fetch` step is only required for **Path A** (the notebook). **Path B** triggers the fetch automatically inside the container the first time `POST /train` is called.
+
 > **Install with `pip`, not `uv`.** On Windows, `uv sync` mishandles the `tensorflow` → `tensorflow-intel` meta-package redirect and leaves TensorFlow non-importable. `pip install -e ".[dev]"` is the supported path. If you've already run `uv sync` and broken the env, recover with:
 >
 > ```powershell
@@ -105,11 +106,11 @@ python -m src.data.fetch
 
 ---
 
-## Flow 1: Notebook demo
+## Path A: Notebook demo
 
-The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo** of the project. It runs the entire pipeline end-to-end in ~2 minutes, covering Requirements 1, 2 and 3 of the challenge spec by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
+The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo** of the project. It runs the entire pipeline end-to-end in ~2 minutes, importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
 
-> ⚠️ **This flow does NOT generate MLflow runs.** The notebook calls `model.fit(...)` directly without wrapping it in `mlflow.start_run()`. If you want MLflow tracking, use **Flow 2** or **Flow 3** instead. The notebook still saves `models/lstm_baba.keras` + `models/scaler.pkl` to disk.
+> ⚠️ **This path does NOT generate MLflow runs.** The notebook calls `model.fit(...)` directly without wrapping it in `mlflow.start_run()`. For MLflow tracking, use **Path B**. The notebook still saves `models/lstm_baba.keras` + `models/scaler.pkl` to disk.
 
 **Launch it:**
 
@@ -123,18 +124,19 @@ jupyter lab notebooks/01_eda_lstm_baba.ipynb
 | # | Section | What it shows |
 | - | --- | --- |
 | 1 | **Imports + config** | Loads `src/config.py` constants (ticker, lookback, hyperparams). |
-| 2 | **Requirement 1.1: Data collection** | Reads `data/raw/baba.parquet` (auto-fetches if missing). 2,800+ trading days. |
+| 2 | **Data collection** | Reads `data/raw/baba.parquet` (auto-fetches if missing). 2,800+ trading days. |
 | 3 | **EDA: Price + volume** | Two-panel chart: BABA Close (top) and Volume (bottom). |
 | 4 | **EDA: Daily returns** | Close + 60-day rolling mean, plus daily returns. Visual proof prices are non-stationary, returns are not. |
 | 5 | **Naive baseline** | MAE / RMSE / MAPE for "predict yesterday's close". The floor any model must beat. |
-| 6 | **Requirement 1.2: Preprocessing** | Calls `build_splits()` from `src/data/preprocess.py`; shows shapes and scaler bounds. |
-| 7 | **Requirement 2.1: Model construction** | Calls `build_lstm()` from `src/model/architecture.py`; renders `model.summary()`. |
-| 8 | **Requirement 2.2: Training** | Real training loop (~30 epochs, ~1 min on CPU) with `EarlyStopping` + `ModelCheckpoint`. Plots loss/val_loss + mae/val_mae curves. |
-| 9 | **Requirement 2.3: Evaluation** | Inverse-transforms predictions, computes MAE/RMSE/MAPE in USD via `all_metrics()` from `src/model/evaluate.py`, prints LSTM-vs-naive comparison. |
-| 10 | **Actual vs predicted plot** | Overlays prediction series on real series for the test window. |
-| 11 | **Requirement 3: Saving** | `model.save()` + `joblib.dump(scaler)` to `models/`. |
-| 12 | **Requirement 4: Deploy (reference)** | Pointer card to `src/api/` and Docker setup. Not executed in the notebook. |
-| 13 | **Requirement 5: Monitoring (reference)** | Pointer to MLflow setup + serving middleware. |
+| 6 | **Preprocessing** | Calls `build_splits()` from `src/data/preprocess.py`; shows shapes and scaler bounds. |
+| 7 | **Why an LSTM?** | Short narrative on RNNs, vanishing gradients, and how LSTM gates solve it. |
+| 8 | **Model architecture** | Calls `build_lstm()` from `src/model/architecture.py`; renders `model.summary()`. |
+| 9 | **Training** | Real training loop (~30 epochs, ~1 min on CPU) with `EarlyStopping` + `ModelCheckpoint`. Plots loss/val_loss + mae/val_mae curves. |
+| 10 | **Evaluation** | Inverse-transforms predictions, computes MAE/RMSE/MAPE in USD via `all_metrics()` from `src/model/evaluate.py`, prints LSTM-vs-naive comparison. |
+| 11 | **Actual vs predicted plot** | Overlays prediction series on real series for the test window. |
+| 12 | **Saving** | `model.save()` + `joblib.dump(scaler)` to `models/`. |
+| 13 | **Serving (reference)** | Pointer card to `src/api/` and Docker setup. Not executed in the notebook. |
+| 14 | **Monitoring (reference)** | Pointer to MLflow setup + serving middleware. |
 
 **Tips:**
 
@@ -143,56 +145,15 @@ jupyter lab notebooks/01_eda_lstm_baba.ipynb
 
 ---
 
-## Flow 2: Local script with MLflow file backend
+## Path B: Docker Compose (full pipeline)
 
-For iteration and reproducible training with full MLflow tracking, run the training script directly. Runs land in `./mlruns/` (file backend).
+The `Dockerfile` and `docker-compose.yml` package the API + a dedicated MLflow server as a portable stack. All MLflow-tracked training happens here, fired through the API's `POST /train` endpoint. Requires Docker Desktop running.
 
-```powershell
-# Train + log to ./mlruns/ + save models/lstm_baba.keras + scaler.pkl
-python -m src.model.train
-
-# Tune via CLI flags
-python -m src.model.train --epochs 100 --units 64 --batch-size 64 --lr 5e-4
-
-# Serve the API locally
-uvicorn src.api.main:app --reload
-# → http://localhost:8000/docs
-```
-
-**View MLflow runs in the browser:**
-
-```powershell
-mlflow ui --backend-store-uri ./mlruns --port 5050
-# → http://localhost:5050
-```
-
-> Use port `5050` to avoid colliding with the compose MLflow on `5000` (in case Flow 3 is also up).
-
-Each `python -m src.model.train` invocation logs:
-
-- **Params**: `epochs`, `batch_size`, `units`, `dropout`, `lookback`, `learning_rate`, `patience`, `seed`.
-- **Per-epoch metrics**: `loss`, `val_loss`, `mae`, `val_mae`.
-- **Test metrics (USD scale)**: `test_mae`, `test_rmse`, `test_mape`.
-- **Artifact**: the saved Keras model.
-- **Registry entry**: `lstm-baba`, auto-incremented version.
-
-Training takes ~1 minute on CPU.
-
----
-
-## Flow 3: Docker compose (full stack)
-
-The `Dockerfile` and `docker-compose.yml` package the API and a dedicated MLflow server as a portable stack, demonstrating deployment + monitoring maturity (Requirements 4 and 5 of the spec). Requires Docker Desktop running.
-
-### Prerequisite: trained model on disk
-
-The Docker image bakes in `models/lstm_baba.keras` + `models/scaler.pkl` at build time. If those don't exist yet, run **Flow 1** or **Flow 2** first to produce them.
-
-### Bring up the stack
+### 1. Bring up the stack
 
 ```powershell
 docker compose up -d --build
-docker compose ps     # both services should be `Up (healthy)` after ~15s
+docker compose ps     # both services should be Up (healthy) after ~15s
 ```
 
 | Service       | Host port | Container port | Purpose                                |
@@ -202,32 +163,45 @@ docker compose ps     # both services should be `Up (healthy)` after ~15s
 
 > Host port for the API is `8010` (not `8000`) to avoid colliding with other dev containers. The container itself still listens on `8000`.
 
-### Smoke-test the API
+Two bind mounts in `docker-compose.yml` make the runtime data persist on the host:
+- `./models:/app/models` — keeps the trained `lstm_baba.keras` + `scaler.pkl` between container restarts.
+- `./data/raw:/app/data/raw` — caches `baba.parquet` so the first `/train` doesn't re-download from yfinance every time.
+
+### 2. Train the model via the API
+
+```powershell
+# Train with all defaults (epochs=50, units=50, lookback=60, ...)
+curl -X POST http://localhost:8010/train -H "Content-Type: application/json" -d '{}'
+
+# Override any hyperparameter
+curl -X POST http://localhost:8010/train -H "Content-Type: application/json" `
+     -d '{"epochs": 30, "units": 64, "learning_rate": 5e-4}'
+```
+
+The endpoint blocks for ~1 minute and returns the run id, test metrics, model path, and the MLflow tracking URI used. After it returns, the API has already reloaded the freshly trained model in memory — `POST /predict` and `POST /predict/latest` start using it immediately.
+
+Each `POST /train` invocation logs to MLflow:
+
+- **Params**: `epochs`, `batch_size`, `units`, `dropout`, `lookback`, `learning_rate`, `patience`, `seed`.
+- **Per-epoch metrics**: `loss`, `val_loss`, `mae`, `val_mae`.
+- **Test metrics (USD scale)**: `test_mae`, `test_rmse`, `test_mape`.
+- **Artifact**: the saved Keras model.
+- **Registry entry**: `lstm-baba`, auto-incremented version (when the server supports it).
+
+### 3. Browse MLflow
+
+Open `http://localhost:5000` in the browser. The `baba-lstm` experiment lists every run, with metrics, params, and the model artifact.
+
+> **Note on the model registry:** the compose image is `ghcr.io/mlflow/mlflow:v2.16.2` while the client is `mlflow>=3.x`. The `registered_model_name=` call returns 404 against the older server, gets caught by a `try/except` inside `src/model/train.py`, and is logged as a warning. Run + metrics + artifact still log fine. Bump the compose image to `ghcr.io/mlflow/mlflow:v3.12.0` if you want registry write-through.
+
+### 4. Smoke-test the prediction endpoints
 
 ```powershell
 curl http://localhost:8010/health
 curl -X POST http://localhost:8010/predict/latest
 ```
 
-### Logging a training run into the compose MLflow
-
-By default, `python -m src.model.train` writes to the local file backend (`./mlruns/`). To send a run to the **dockerized** MLflow server instead, set two env vars **before** invoking training:
-
-```powershell
-$env:MLFLOW_TRACKING_URI = "http://localhost:5000"
-$env:PYTHONIOENCODING = "utf-8"   # avoids a cp1252 emoji crash on Windows
-python -m src.model.train
-# then clear when done:
-Remove-Item Env:\MLFLOW_TRACKING_URI
-```
-
-Refresh `http://localhost:5000` after the run finishes to see it under experiment `baba-lstm`.
-
-> **Why `PYTHONIOENCODING` and not a `.env` file:** MLflow's client prints emoji to stdout. On Windows, the default cp1252 codec crashes on them. `PYTHONIOENCODING` is read by the CPython interpreter **before** any Python code runs, so a `.env` loaded via `python-dotenv` is too late. The env var must be set in the shell.
->
-> **Note on the model registry:** the compose image is `ghcr.io/mlflow/mlflow:v2.16.2` while the client is `mlflow>=3.x`. The `registered_model_name=` call returns 404 against the older server, gets caught by a `try/except`, and is logged as a warning. Run + metrics + artifact still log fine. Bump the compose image to `ghcr.io/mlflow/mlflow:v3.12.0` if you want registry write-through.
-
-### Stop the stack
+### 5. Stop the stack
 
 ```powershell
 docker compose stop   # pauses, keeps volumes
@@ -308,6 +282,41 @@ In-process counters and latency percentiles over the last 1,000 requests.
   "latency_ms": {"p50": 11.4, "p95": 92.7, "p99": 178.0, "mean": 27.1}
 }
 ```
+
+### `POST /train`
+
+Kicks off a training run. Synchronous: blocks for the duration of training (~1 minute with defaults on CPU). On success, the API automatically reloads its in-process model so subsequent `/predict` calls use the freshly trained weights.
+
+All hyperparameters are optional. Pass an empty body to train with defaults from `src/config.py:MODEL`:
+
+```bash
+curl -X POST http://localhost:8010/train \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Override anything you like:
+
+```bash
+curl -X POST http://localhost:8010/train \
+  -H "Content-Type: application/json" \
+  -d '{"epochs": 30, "units": 64, "batch_size": 64, "learning_rate": 5e-4, "dropout": 0.3}'
+```
+
+Response:
+
+```json
+{
+  "status": "completed",
+  "run_id": "02defbd59a01418b8e60b61b4e35dc96",
+  "test_metrics": {"mae": 4.44, "rmse": 5.92, "mape": 3.50},
+  "model_path": "/app/models/lstm_baba.keras",
+  "duration_seconds": 67.2,
+  "mlflow_tracking_uri": "http://mlflow:5000"
+}
+```
+
+**Validation errors (HTTP 422):** any hyperparameter outside its bounds (e.g. `epochs <= 0`, `dropout >= 1`).
 
 ---
 

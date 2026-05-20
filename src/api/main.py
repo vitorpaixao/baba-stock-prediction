@@ -1,10 +1,13 @@
-"""FastAPI app — health, predict, predict/latest, metrics."""
+"""FastAPI app — health, predict, predict/latest, metrics, train."""
 from __future__ import annotations
 
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
+import mlflow
 import pandas as pd
 import yfinance as yf
 from fastapi import FastAPI, HTTPException
@@ -17,8 +20,11 @@ from src.api.schemas import (
     MetricsResponse,
     PredictRequest,
     PredictResponse,
+    TrainRequest,
+    TrainResponse,
 )
 from src.config import DATA, MODEL, MODEL_PATH
+from src.model.train import train as train_fn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger(__name__)
@@ -52,7 +58,7 @@ def _require_predictor() -> Predictor:
     p = _state.get("predictor")
     if p is None:
         raise HTTPException(status_code=503,
-                            detail="Model not loaded. Train first: python -m src.model.train")
+                            detail="Model not loaded. Train first via POST /train.")
     return p
 
 
@@ -107,4 +113,46 @@ def predict_latest() -> LatestPredictResponse:
         as_of=end,
         window_start=window_dates[0].date(),
         window_end=window_dates[-1].date(),
+    )
+
+
+@app.post("/train", response_model=TrainResponse, tags=["train"])
+def train_model(body: TrainRequest | None = None) -> TrainResponse:
+    """Run a fresh training pass, refresh the in-process model.
+
+    Blocks for the duration of training (~1 min on CPU with defaults).
+    FastAPI offloads sync handlers to a threadpool, so concurrent /predict
+    calls are not blocked.
+    """
+    body = body or TrainRequest()
+    kwargs = body.merged_with_defaults()
+
+    log.info("POST /train kicked off with kwargs=%s", kwargs)
+    t0 = time.perf_counter()
+    try:
+        metrics = train_fn(**kwargs)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except mlflow.exceptions.MlflowException as e:
+        raise HTTPException(status_code=503, detail=f"MLflow unreachable: {e}")
+    duration = time.perf_counter() - t0
+
+    try:
+        _state["predictor"] = load_predictor()
+        log.info("Predictor reloaded after training.")
+    except FileNotFoundError as e:
+        log.warning("Trained model not found on reload: %s", e)
+
+    last_run = mlflow.last_active_run()
+    run_id = last_run.info.run_id if last_run is not None else ""
+
+    return TrainResponse(
+        status="completed",
+        run_id=run_id,
+        test_metrics=metrics,
+        model_path=str(MODEL_PATH),
+        duration_seconds=round(duration, 1),
+        mlflow_tracking_uri=os.environ.get(
+            "MLFLOW_TRACKING_URI", f"file:{MODEL_PATH.parent.parent / 'mlruns'}"
+        ),
     )
