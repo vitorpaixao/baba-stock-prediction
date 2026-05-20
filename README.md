@@ -19,8 +19,6 @@
 
 This is the deliverable for **Tech Challenge — Phase 4** of the MLET postgraduate program (worth 90% of the phase grade). The goal is to go end-to-end on a deep-learning system: **collect → preprocess → train an LSTM → save the model → serve it through a REST API → monitor it in production**.
 
-Spec: [`plan/plan.md`](plan/plan.md) · Implementation check: [`plan/challenge_check.md`](plan/challenge_check.md) · Concepts & defense notes: [`plan/challenge_process.md`](plan/challenge_process.md)
-
 ---
 
 ## At a glance
@@ -73,8 +71,6 @@ Spec: [`plan/plan.md`](plan/plan.md) · Implementation check: [`plan/challenge_c
 ## Quickstart — Local (recommended for demo)
 
 The **fastest path** is local Python. The notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) runs the entire pipeline end-to-end in ~2 minutes — data collection, LSTM model, training, evaluation, model saving. See [Exploring with the notebook](#exploring-with-the-notebook) below.
-
-For a video defense, follow [`plan/demo_script.md`](plan/demo_script.md) — an ~11 min step-by-step that uses the notebook as the centerpiece.
 
 ---
 
@@ -136,7 +132,7 @@ python -m src.model.train --epochs 100 --units 64 --batch-size 64 --lr 5e-4
 
 The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo of the project**. It runs the entire pipeline end-to-end — covering **Requirements 1, 2 and 3** of the challenge spec — by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
 
-Use it as the starting point if you want to understand the project, **and** as the script for the video defense (see [`plan/demo_script.md`](plan/demo_script.md)).
+Use it as the starting point if you want to understand the project.
 
 **Launch it:**
 
@@ -300,8 +296,7 @@ baba-stock-prediction/
 ├── data/raw/baba.parquet               # (gitignored)
 ├── Dockerfile                          # python:3.12-slim, healthcheck
 ├── docker-compose.yml                  # api + mlflow services
-├── pyproject.toml                      # dependencies
-└── plan/                               # spec + delivery check + concept guide
+└── pyproject.toml                      # dependencies
 ```
 
 ---
@@ -330,18 +325,6 @@ Tests run in ~30 seconds without hitting yfinance or training a real model (they
 - **Price vs. returns.** Stock prices are non-stationary; predicting **returns** (Δp/p) is more rigorous than predicting prices, even when MAPE looks pretty.
 - **Single hold-out.** A walk-forward / expanding-window backtest gives a much more robust estimate of out-of-sample error.
 - **Regression accuracy ≠ trading utility.** For real money you'd care about *direction accuracy* and *Sharpe of the strategy on top*, not MAPE.
-
----
-
-## Further reading inside this repo
-
-| Doc | What it's for |
-| --- | --- |
-| [`plan/plan.md`](plan/plan.md) | Original tech-challenge spec (Portuguese). |
-| [`plan/challenge_check.md`](plan/challenge_check.md) | Spec → delivered mapping with file pointers. Use this for grading. |
-| [`plan/challenge_process.md`](plan/challenge_process.md) | Concepts, decisions, and metric definitions — defense notes for the board. |
-| [`plan/demo_script.md`](plan/demo_script.md) | Step-by-step ~11 min script for the video defense (notebook-first, Docker as backup). |
-| [`plan/podcast_script.md`](plan/podcast_script.md) | 4-episode podcast script (PT-BR) covering the project end-to-end. |
 
 ---
 
