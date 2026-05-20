@@ -17,7 +17,7 @@
 
 ## Why this exists
 
-This is the deliverable for **Tech Challenge Fase 4** of the MLET pós-graduação (worth 90% of the phase grade). The goal is to go end-to-end on a deep-learning system: **collect → preprocess → train an LSTM → save the model → serve it through a REST API → monitor it in production**.
+This is the deliverable for **Tech Challenge — Phase 4** of the MLET postgraduate program (worth 90% of the phase grade). The goal is to go end-to-end on a deep-learning system: **collect → preprocess → train an LSTM → save the model → serve it through a REST API → monitor it in production**.
 
 Spec: [`plan/plan.md`](plan/plan.md) · Implementation check: [`plan/challenge_check.md`](plan/challenge_check.md) · Concepts & defense notes: [`plan/challenge_process.md`](plan/challenge_process.md)
 
@@ -72,7 +72,7 @@ Spec: [`plan/plan.md`](plan/plan.md) · Implementation check: [`plan/challenge_c
 
 ## Quickstart — Local (recommended for demo)
 
-The **fastest path** is local Python. The notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) runs the entire pipeline end-to-end in ~2 minutes — coleta, modelo LSTM, treino, avaliação, salvamento. See [Exploring with the notebook](#exploring-with-the-notebook) below.
+The **fastest path** is local Python. The notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) runs the entire pipeline end-to-end in ~2 minutes — data collection, LSTM model, training, evaluation, model saving. See [Exploring with the notebook](#exploring-with-the-notebook) below.
 
 For a video defense, follow [`plan/demo_script.md`](plan/demo_script.md) — an ~11 min step-by-step that uses the notebook as the centerpiece.
 
@@ -80,7 +80,7 @@ For a video defense, follow [`plan/demo_script.md`](plan/demo_script.md) — an 
 
 ## Quickstart — Docker Compose (deployment artifact)
 
-The `Dockerfile` and `docker-compose.yml` package the API + MLflow as a portable stack — useful to demonstrate MLOps maturity for the spec (Fase 4 / 5), though for a live demo the local path above is more reliable. Requires Docker Desktop running. The trained model + scaler must already exist locally under `models/`; if not, run the local training step (one command) below first.
+The `Dockerfile` and `docker-compose.yml` package the API + MLflow as a portable stack — useful to demonstrate MLOps maturity for the spec (Requirements 4 and 5), though for a live demo the local path above is more reliable. Requires Docker Desktop running. The trained model + scaler must already exist locally under `models/`; if not, run the local training step (one command) below first.
 
 ```bash
 docker compose up -d --build
@@ -134,7 +134,7 @@ python -m src.model.train --epochs 100 --units 64 --batch-size 64 --lr 5e-4
 
 ## Exploring with the notebook
 
-The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo of the project**. It runs the entire pipeline end-to-end — covering **Fases 1, 2 and 3** of the challenge spec — by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
+The Jupyter notebook at [`notebooks/01_eda_lstm_baba.ipynb`](notebooks/01_eda_lstm_baba.ipynb) is the **primary demo of the project**. It runs the entire pipeline end-to-end — covering **Requirements 1, 2 and 3** of the challenge spec — by importing the same functions used by the production code in `src/`. No duplication; the notebook is a narrated wrapper around the modular pipeline.
 
 Use it as the starting point if you want to understand the project, **and** as the script for the video defense (see [`plan/demo_script.md`](plan/demo_script.md)).
 
@@ -150,18 +150,18 @@ jupyter lab notebooks/01_eda_lstm_baba.ipynb
 | # | Section | What it shows |
 | - | --- | --- |
 | 1 | **Imports + config** | Loads `src/config.py` constants (ticker, lookback, hyperparams). |
-| 2 | **Fase 1.1 — Coleta** | Reads `data/raw/baba.parquet` (auto-fetches if missing). 2,800+ trading days. |
-| 3 | **EDA — Preço + volume** | Two-panel chart: BABA Close (top) and Volume (bottom). |
-| 4 | **EDA — Retornos diários** | Close + 60-day rolling mean, plus daily returns. Visual proof prices are non-stationary, returns are not. |
-| 5 | **Baseline ingênuo** | MAE / RMSE / MAPE for "predict yesterday's close". The floor any model must beat. |
-| 6 | **Fase 1.2 — Pré-processamento** | Calls `build_splits()` from `src/data/preprocess.py`; shows shapes and scaler bounds. |
-| 7 | **Fase 2.1 — Construção** | Calls `build_lstm()` from `src/model/architecture.py`; renders `model.summary()`. |
-| 8 | **Fase 2.2 — Treinamento** | Real training loop (~30 epochs, ~1 min on CPU) with `EarlyStopping` + `ModelCheckpoint`. Plots loss/val_loss + mae/val_mae curves. |
-| 9 | **Fase 2.3 — Avaliação** | Inverse-transforms predictions, computes MAE/RMSE/MAPE in USD via `all_metrics()` from `src/model/evaluate.py`, prints LSTM-vs-naive comparison. |
+| 2 | **Requirement 1.1 — Data collection** | Reads `data/raw/baba.parquet` (auto-fetches if missing). 2,800+ trading days. |
+| 3 | **EDA — Price + volume** | Two-panel chart: BABA Close (top) and Volume (bottom). |
+| 4 | **EDA — Daily returns** | Close + 60-day rolling mean, plus daily returns. Visual proof prices are non-stationary, returns are not. |
+| 5 | **Naive baseline** | MAE / RMSE / MAPE for "predict yesterday's close". The floor any model must beat. |
+| 6 | **Requirement 1.2 — Preprocessing** | Calls `build_splits()` from `src/data/preprocess.py`; shows shapes and scaler bounds. |
+| 7 | **Requirement 2.1 — Model construction** | Calls `build_lstm()` from `src/model/architecture.py`; renders `model.summary()`. |
+| 8 | **Requirement 2.2 — Training** | Real training loop (~30 epochs, ~1 min on CPU) with `EarlyStopping` + `ModelCheckpoint`. Plots loss/val_loss + mae/val_mae curves. |
+| 9 | **Requirement 2.3 — Evaluation** | Inverse-transforms predictions, computes MAE/RMSE/MAPE in USD via `all_metrics()` from `src/model/evaluate.py`, prints LSTM-vs-naive comparison. |
 | 10 | **Actual vs predicted plot** | Overlays prediction series on real series for the test window. |
-| 11 | **Fase 3 — Salvamento** | `model.save()` + `joblib.dump(scaler)` to `models/`. |
-| 12 | **Fase 4 — Deploy (referência)** | Pointer card to `src/api/` and Docker setup. Not executed in the notebook. |
-| 13 | **Fase 5 — Monitoring (referência)** | Pointer to MLflow setup + serving middleware. |
+| 11 | **Requirement 3 — Saving** | `model.save()` + `joblib.dump(scaler)` to `models/`. |
+| 12 | **Requirement 4 — Deploy (reference)** | Pointer card to `src/api/` and Docker setup. Not executed in the notebook. |
+| 13 | **Requirement 5 — Monitoring (reference)** | Pointer to MLflow setup + serving middleware. |
 
 **Tips:**
 
@@ -347,6 +347,6 @@ Tests run in ~30 seconds without hitting yfinance or training a real model (they
 
 <div align="center">
 
-Tech Challenge Fase 4 — MLET pós-graduação · Built with TensorFlow, FastAPI, MLflow, Docker.
+Tech Challenge Phase 4 — MLET postgraduate program · Built with TensorFlow, FastAPI, MLflow, Docker.
 
 </div>
