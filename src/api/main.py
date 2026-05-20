@@ -1,4 +1,4 @@
-"""FastAPI app — health, predict, predict/latest, metrics, train."""
+"""FastAPI app — health, predict, predict/latest, train, /metrics (Prometheus)."""
 from __future__ import annotations
 
 import logging
@@ -8,16 +8,29 @@ from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
 import mlflow
+import numpy as np
 import pandas as pd
 import yfinance as yf
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.api.inference import Predictor, load_predictor
-from src.api.middleware import METRICS, AccessLogMiddleware
+from src.api.metrics import (
+    INFERENCE_DURATION,
+    INPUT_WINDOW_MEAN,
+    INPUT_WINDOW_STD,
+    LAST_TRAIN_METRIC,
+    LAST_TRAIN_TS,
+    MODEL_LOADED,
+    PREDICTED_VALUE,
+    PREDICTION_COUNT,
+    TRAIN_COUNT,
+    TRAIN_DURATION,
+)
+from src.api.middleware import AccessLogMiddleware
 from src.api.schemas import (
     HealthResponse,
     LatestPredictResponse,
-    MetricsResponse,
     PredictRequest,
     PredictResponse,
     TrainRequest,
@@ -37,12 +50,15 @@ _state: dict[str, Predictor | None] = {"predictor": None}
 async def lifespan(app: FastAPI):
     try:
         _state["predictor"] = load_predictor()
+        MODEL_LOADED.set(1)
         log.info("Model loaded.")
     except FileNotFoundError as e:
         log.warning("Predictor not available: %s", e)
         _state["predictor"] = None
+        MODEL_LOADED.set(0)
     yield
     _state["predictor"] = None
+    MODEL_LOADED.set(0)
 
 
 app = FastAPI(
@@ -53,6 +69,14 @@ app = FastAPI(
 )
 app.add_middleware(AccessLogMiddleware)
 
+# Prometheus HTTP instrumentation. Exposes /metrics in Prometheus text format.
+# Auto-tracks http_requests_total + http_request_duration_seconds (histogram)
+# plus the standard process collectors (memory, CPU, GC).
+Instrumentator(
+    excluded_handlers=["/metrics"],          # don't measure the scrape endpoint itself
+    should_group_status_codes=False,         # keep 200 / 422 / 503 distinct
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
 
 def _require_predictor() -> Predictor:
     p = _state.get("predictor")
@@ -60,6 +84,13 @@ def _require_predictor() -> Predictor:
         raise HTTPException(status_code=503,
                             detail="Model not loaded. Train first via POST /train.")
     return p
+
+
+def _observe_window(closes: list[float]) -> None:
+    """Push input-window summary stats into the drift histograms."""
+    arr = np.asarray(closes, dtype=np.float64)
+    INPUT_WINDOW_MEAN.observe(float(arr.mean()))
+    INPUT_WINDOW_STD.observe(float(arr.std()))
 
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])
@@ -73,11 +104,6 @@ def health() -> HealthResponse:
     )
 
 
-@app.get("/metrics", response_model=MetricsResponse, tags=["meta"])
-def metrics() -> MetricsResponse:
-    return MetricsResponse(**METRICS.snapshot())
-
-
 @app.post("/predict", response_model=PredictResponse, tags=["predict"])
 def predict(body: PredictRequest) -> PredictResponse:
     predictor = _require_predictor()
@@ -85,6 +111,10 @@ def predict(body: PredictRequest) -> PredictResponse:
         value, elapsed_ms = predictor.predict_next(body.closes)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    PREDICTION_COUNT.labels(endpoint="/predict").inc()
+    INFERENCE_DURATION.labels(endpoint="/predict").observe(elapsed_ms / 1000.0)
+    PREDICTED_VALUE.observe(value)
+    _observe_window(body.closes)
     return PredictResponse(predicted_close=value, inference_ms=round(elapsed_ms, 2))
 
 
@@ -107,6 +137,12 @@ def predict_latest() -> LatestPredictResponse:
                             detail=f"Need {MODEL.lookback} closes, got {len(closes)}")
     window_dates = df.index[-MODEL.lookback:]
     value, elapsed_ms = predictor.predict_next(closes.tolist())
+
+    PREDICTION_COUNT.labels(endpoint="/predict/latest").inc()
+    INFERENCE_DURATION.labels(endpoint="/predict/latest").observe(elapsed_ms / 1000.0)
+    PREDICTED_VALUE.observe(value)
+    _observe_window(closes.tolist())
+
     return LatestPredictResponse(
         predicted_close=value,
         inference_ms=round(elapsed_ms, 2),
@@ -139,9 +175,17 @@ def train_model(body: TrainRequest | None = None) -> TrainResponse:
 
     try:
         _state["predictor"] = load_predictor()
+        MODEL_LOADED.set(1)
         log.info("Predictor reloaded after training.")
     except FileNotFoundError as e:
         log.warning("Trained model not found on reload: %s", e)
+
+    # Update training-observability metrics.
+    TRAIN_COUNT.inc()
+    TRAIN_DURATION.observe(duration)
+    LAST_TRAIN_TS.set(time.time())
+    for k, v in metrics.items():
+        LAST_TRAIN_METRIC.labels(metric=k).set(float(v))
 
     last_run = mlflow.last_active_run()
     run_id = last_run.info.run_id if last_run is not None else ""

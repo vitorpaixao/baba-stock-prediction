@@ -49,12 +49,6 @@ class HealthResponse(BaseModel):
     lookback: int
 
 
-class MetricsResponse(BaseModel):
-    total_requests: int
-    by_route: dict[str, int]
-    latency_ms: dict[str, float]  # p50, p95, p99, mean
-
-
 class TrainRequest(BaseModel):
     """Hyperparameter overrides for POST /train. All optional, defaults from MODEL."""
 

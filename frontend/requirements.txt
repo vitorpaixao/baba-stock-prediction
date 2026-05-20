@@ -1,0 +1,4 @@
+streamlit>=1.40
+requests>=2.32
+prometheus-client>=0.20
+streamlit-autorefresh>=1.0

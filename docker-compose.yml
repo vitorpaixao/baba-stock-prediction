@@ -29,5 +29,60 @@ services:
       --default-artifact-root /mlflow/artifacts
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: baba-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: baba-grafana
+    ports:
+      - "3001:3000"   # host 3001 to avoid colliding with other dev containers on 3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  streamlit:
+    build: ./frontend
+    image: baba-streamlit:latest
+    container_name: baba-streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_INTERNAL=http://api:8000
+      - API_BASE_BROWSER=http://localhost:8010
+      - MLFLOW_URL_BROWSER=http://localhost:5000
+      - GRAFANA_URL_BROWSER=http://localhost:3001
+      - PROMETHEUS_URL_BROWSER=http://localhost:9090
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   mlflow-data:
+  prometheus-data:
+  grafana-data:

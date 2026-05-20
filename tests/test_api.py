@@ -56,17 +56,22 @@ def test_predict_non_positive_422(client) -> None:
     assert r.status_code == 422
 
 
-def test_metrics_after_traffic(client, synthetic_df) -> None:
+def test_metrics_prometheus_format(client, synthetic_df) -> None:
+    """`/metrics` returns Prometheus exposition text and exposes our custom series."""
     client.get("/health")
     closes = synthetic_df["Close"].astype(float).values[-MODEL.lookback:].tolist()
     client.post("/predict", json={"closes": closes})
 
     r = client.get("/metrics")
     assert r.status_code == 200
-    body = r.json()
-    assert body["total_requests"] >= 2
-    assert "/health" in body["by_route"]
-    assert body["latency_ms"]["mean"] >= 0
+    assert r.headers["content-type"].startswith("text/plain")
+    body = r.text
+    # HTTP-level metrics from prometheus-fastapi-instrumentator
+    assert "http_requests_total" in body or "http_request_duration_seconds" in body
+    # Custom domain metrics from src/api/metrics.py
+    assert "baba_predictions_total" in body
+    assert "baba_inference_duration_seconds" in body
+    assert "baba_model_loaded" in body
 
 
 def test_train_endpoint_smoke(client, monkeypatch) -> None:

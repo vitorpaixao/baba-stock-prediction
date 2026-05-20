@@ -13,12 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first (cached layer).
+# pytest + httpx are needed so `docker compose exec api pytest` works out of the box.
 COPY pyproject.toml README.md ./
-RUN pip install --upgrade pip && pip install .
+RUN pip install --upgrade pip && pip install . pytest pytest-asyncio httpx
 
-# App code + trained model.
+# App code + trained model + tests (tests are mounted at runtime via compose,
+# but COPY here keeps the image self-contained).
 COPY src ./src
 COPY models ./models
+COPY tests ./tests
 
 EXPOSE 8000
 
